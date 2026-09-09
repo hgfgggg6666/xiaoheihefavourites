@@ -64,21 +64,26 @@ async function apiPost(path, data = {}) {
   return JSON.parse(res.data.toString());
 }
 
-async function waitForServer(maxRetries = 60) {
-  console.log('等待应用启动...');
+async function waitForServer(maxRetries = 120) {
+  console.log('等待应用启动...（最多等待 120 秒）');
   // 先等 5 秒，让应用有时间初始化
   await sleep(5000);
   for (let i = 0; i < maxRetries; i++) {
+    // 检查应用进程是否还在运行
+    if (serverProcess && serverProcess.exitCode !== null) {
+      console.log(`\n应用进程已退出，exitCode: ${serverProcess.exitCode}`);
+      return false;
+    }
     try {
       await apiGet('/api/archives/stats');
-      console.log('应用已启动！');
+      console.log('\n应用已启动！');
       return true;
     } catch {
       process.stdout.write('.');
       await sleep(1000);
     }
   }
-  console.log('\n应用启动超时');
+  console.log('\n应用启动超时（120秒）');
   return false;
 }
 
