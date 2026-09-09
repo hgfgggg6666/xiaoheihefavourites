@@ -9,11 +9,15 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
+  logger.log('开始初始化应用...');
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     abortOnError: process.env.NODE_ENV !== 'development',
   });
 
-  const logger = new Logger('Bootstrap');
+  logger.log('NestFactory 创建成功，开始配置中间件...');
+
   const host = process.env.SERVER_HOST || 'localhost';
   const port = Number(process.env.SERVER_PORT || process.env.PORT || '3000');
 
@@ -27,6 +31,8 @@ async function bootstrap() {
 
   // 全局 ValidationPipe
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+
+  logger.log('中间件配置完成，开始配置静态资源...');
 
   // 静态资源：必须在路由之前注册，否则会被 view.controller 的 * 通配符拦截
   const clientDir = join(process.cwd(), 'dist/client');
@@ -42,10 +48,16 @@ async function bootstrap() {
   app.setViewEngine('html');
   app.engine('html', hbsExpressEngine);
 
+  logger.log('静态资源配置完成，开始启动服务器...');
+
   await app.listen(port, host);
   logger.log(`Server running on http://${host}:${port}`);
   logger.log(`API endpoints ready at http://${host}:${port}/api`);
   logger.log(`Open http://${host}:${port}/app/ in your browser`);
+  logger.log('应用启动完成！');
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('应用启动失败:', err);
+  process.exit(1);
+});
