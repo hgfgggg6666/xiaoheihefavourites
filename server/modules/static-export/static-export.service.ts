@@ -272,13 +272,32 @@ export class StaticExportService {
       const rawData = row.rawData as Record<string, any>;
       const link = rawData?.link ?? rawData ?? {};
 
+      // 正文内容：优先使用帖子详情里的完整正文
+      // 小黑盒帖子的完整正文在 text 字段（富文本数组），description 是被截断的摘要
       let content: string | null = row.summary;
-      if (link.desc && typeof link.desc === 'string') {
-        content = link.desc;
-      } else if (link.content && typeof link.content === 'string') {
-        content = link.content;
-      } else if (link.description && typeof link.description === 'string') {
-        content = link.description;
+      const hasFullDetail = rawData?.full_detail === true;
+
+      if (hasFullDetail) {
+        // 已经抓取了完整正文，优先解析 text 字段（富文本数组）
+        const fullText = this.extractTextFromRichText(link.text);
+        if (fullText && fullText.length > 100) {
+          content = fullText;
+        } else if (link.description && typeof link.description === 'string' && link.description.length > 100) {
+          content = link.description;
+        } else if (link.content && typeof link.content === 'string' && link.content.length > 100) {
+          content = link.content;
+        } else if (link.desc && typeof link.desc === 'string' && link.desc.length > 100) {
+          content = link.desc;
+        }
+      } else {
+        // 没有完整正文，用收藏夹列表里的摘要（可能被截断）
+        if (link.desc && typeof link.desc === 'string') {
+          content = link.desc;
+        } else if (link.content && typeof link.content === 'string') {
+          content = link.content;
+        } else if (link.description && typeof link.description === 'string') {
+          content = link.description;
+        }
       }
 
       // 从 raw_data.imgs 提取帖子正文所有图片
@@ -738,6 +757,50 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; pa
 
       return buffer.length > 0 ? buffer : null;
     } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 从小黑盒富文本数组中提取纯文本正文
+   * 小黑盒帖子的完整正文在 text 字段，是一个 JSON 数组，包含文本和图片
+   * 格式：[{"text":"...","type":"text"}, {"height":"...","type":"img","url":"...","width":"..."}]
+   */
+  private extractTextFromRichText(textField: any): string | null {
+    if (!textField) return null;
+
+    try {
+      let richTextArray: any[];
+      if (typeof textField === 'string') {
+        richTextArray = JSON.parse(textField);
+      } else if (Array.isArray(textField)) {
+        richTextArray = textField;
+      } else {
+        return null;
+      }
+
+      if (!Array.isArray(richTextArray) || richTextArray.length === 0) {
+        return null;
+      }
+
+      const textParts: string[] = [];
+      for (const item of richTextArray) {
+        if (item && item.type === 'text' && typeof item.text === 'string') {
+          // 清理文本，去掉多余的空格和换行
+          const cleanedText = item.text
+            .replace(/^[\s\n]+/, '')
+            .replace(/[\s\n]+$/, '')
+            .replace(/\n{3,}/g, '\n\n');
+          if (cleanedText.length > 0) {
+            textParts.push(cleanedText);
+          }
+        }
+      }
+
+      if (textParts.length === 0) return null;
+      return textParts.join('\n\n');
+    } catch (e) {
+      this.logger.warn(`解析富文本失败: ${(e as Error).message}`);
       return null;
     }
   }

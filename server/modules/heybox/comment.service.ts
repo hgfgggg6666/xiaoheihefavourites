@@ -199,6 +199,7 @@ export class CommentService {
     totalFloorNum: number;
     status: string;
     msg?: string;
+    link?: any; // 帖子详情（含完整正文）
   }> {
     const basePath = '/bbs/app/link/tree';
     const url = buildHeyboxUrl(basePath, {
@@ -235,7 +236,13 @@ export class CommentService {
     const hasMore = result.result?.has_more_floors === 1 || result.result?.has_more_floors === '1';
     const totalFloorNum = Number(result.result?.total_floor_num ?? 0);
 
-    return { comments: flatComments, hasMore, totalFloorNum, status: 'ok' };
+    return {
+      comments: flatComments,
+      hasMore,
+      totalFloorNum,
+      status: 'ok',
+      link: result.result?.link, // 返回帖子详情
+    };
   }
 
   async fetchSubComments(
@@ -455,6 +462,16 @@ export class CommentService {
 
         retries = 0;
 
+        // 第一次请求时，保存帖子详情（含完整正文）到数据库
+        if (page === 1 && result.link) {
+          try {
+            await this.savePostDetail(linkid, result.link);
+          } catch (e) {
+            const err = e as Error;
+            this.logger.warn(`保存帖子详情失败 linkid=${linkid}: ${err.message}`);
+          }
+        }
+
         const { comments } = result;
         if (comments.length === 0 && !result.hasMore) break;
 
@@ -513,6 +530,39 @@ export class CommentService {
     }
 
     return { successCount, failCount, captcha };
+  }
+
+  /**
+   * 保存帖子详情（含完整正文）到数据库
+   * 把 link/tree API 返回的完整帖子信息合并到 raw_data 里
+   */
+  private async savePostDetail(linkid: string, linkDetail: any): Promise<void> {
+    if (!linkDetail) return;
+
+    // 从数据库读取当前的 raw_data
+    const item = await this.db
+      .select({ id: archiveItem.id, rawData: archiveItem.rawData })
+      .from(archiveItem)
+      .where(eq(archiveItem.linkid, linkid))
+      .limit(1);
+
+    if (item.length === 0) return;
+
+    try {
+      const currentRaw = JSON.parse(item[0].rawData as string || '{}');
+      // 合并帖子详情，完整正文会覆盖被截断的 description
+      const mergedRaw = { ...currentRaw, ...linkDetail, full_detail: true };
+
+      await this.db
+        .update(archiveItem)
+        .set({ rawData: JSON.stringify(mergedRaw) })
+        .where(eq(archiveItem.id, item[0].id));
+
+      this.logger.log(`帖子详情已保存 linkid=${linkid}`);
+    } catch (e) {
+      const err = e as Error;
+      this.logger.warn(`保存帖子详情失败 linkid=${linkid}: ${err.message}`);
+    }
   }
 
   private async crawlSubComments(
