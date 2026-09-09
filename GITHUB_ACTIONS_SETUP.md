@@ -6,8 +6,7 @@
 
 ### 第一步：把代码推送到 GitHub
 
-```powershell
-cd C:\Users\ZUOYANAO\Desktop\Code\xiaoheihefavourites
+
 
 git init
 git add .
