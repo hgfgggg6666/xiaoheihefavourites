@@ -64,8 +64,10 @@ async function apiPost(path, data = {}) {
   return JSON.parse(res.data.toString());
 }
 
-async function waitForServer(maxRetries = 30) {
+async function waitForServer(maxRetries = 60) {
   console.log('等待应用启动...');
+  // 先等 5 秒，让应用有时间初始化
+  await sleep(5000);
   for (let i = 0; i < maxRetries; i++) {
     try {
       await apiGet('/api/archives/stats');
