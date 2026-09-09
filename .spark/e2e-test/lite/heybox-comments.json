@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"首页浏览页正常渲染，左侧栏存在分类/标签区，右侧有瀑布流卡片或空态"},{"id":2,"priority":"p0","description":"侧栏工具区存在「同步收藏」「批量打标」「下载图片」「抓取评论」四个按钮"},{"id":3,"priority":"p1","description":"设置页可访问，包含小黑盒Cookie与OpenAI配置两个区块"},{"id":4,"priority":"p1","description":"详情弹窗可打开，包含标题、作者、AI摘要、标签和评论区区块"},{"id":5,"priority":"p2","description":"评论区包含排序切换、只看作者、刷新三个操作按钮"}]}

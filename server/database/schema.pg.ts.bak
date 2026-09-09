@@ -1,0 +1,293 @@
+/* eslint-disable */
+/** auto generated, do not edit */
+import { sql } from 'drizzle-orm';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, real, text, uniqueIndex, uuid, varchar, customType } from "drizzle-orm/pg-core"
+
+export const customTimestamptz = customType<{
+  data: Date;
+  driverData: string;
+  config: { precision?: number };
+}>({
+  dataType(config) {
+    const precision = typeof config?.precision !== 'undefined'
+      ? ` (${config.precision})`
+      : '';
+    return `timestamptz${precision}`;
+  },
+  toDriver(value: Date | string | number) {
+    if (value == null) return value as any;
+    if (typeof value === 'number') return new Date(value).toISOString();
+    if (typeof value === 'string') return value;
+    if (value instanceof Date) return value.toISOString();
+    throw new Error('Invalid timestamp value');
+  },
+  fromDriver(value: string | Date): Date {
+    if (value instanceof Date) return value;
+    return new Date(value);
+  },
+});
+
+export const userProfile = customType<{
+  data: string;
+  driverData: string;
+}>({
+  dataType() {
+    return 'user_profile';
+  },
+  toDriver(value: string) {
+    return sql`ROW(${value})::user_profile`;
+  },
+  fromDriver(value: string) {
+    const [userId] = value.slice(1, -1).split(',');
+    return userId.trim();
+  },
+});
+
+export type FileAttachment = {
+  bucket_id: string;
+  file_path: string;
+};
+
+export const fileAttachment = customType<{
+  data: FileAttachment;
+  driverData: string;
+}>({
+  dataType() {
+    return 'file_attachment';
+  },
+  toDriver(value: FileAttachment) {
+    return sql`ROW(${value.bucket_id},${value.file_path})::file_attachment`;
+  },
+  fromDriver(value: string): FileAttachment {
+    const [bucketId, filePath] = value.slice(1, -1).split(',');
+    return { bucket_id: bucketId.trim(), file_path: filePath.trim() };
+  },
+});
+
+export function escapeLiteral(str: string): string {
+  return "'" + str.replace(/'/g, "''") + "'";
+}
+
+export const userProfileArray = customType<{
+  data: string[];
+  driverData: string;
+}>({
+  dataType() {
+    return 'user_profile[]';
+  },
+  toDriver(value: string[]) {
+    if (!value || value.length === 0) {
+      return sql`'{}'::user_profile[]`;
+    }
+    const elements = value.map(id => `ROW(${escapeLiteral(id)})::user_profile`).join(',');
+    return sql.raw(`ARRAY[${elements}]::user_profile[]`);
+  },
+  fromDriver(value: string): string[] {
+    if (!value || value === '{}') return [];
+    const inner = value.slice(1, -1);
+    const matches = inner.match(/\([^)]*\)/g) || [];
+    return matches.map(m => m.slice(1, -1).split(',')[0].trim());
+  },
+});
+
+export const fileAttachmentArray = customType<{
+  data: FileAttachment[];
+  driverData: string;
+}>({
+  dataType() {
+    return 'file_attachment[]';
+  },
+  toDriver(value: FileAttachment[]) {
+    if (!value || value.length === 0) {
+      return sql`'{}'::file_attachment[]`;
+    }
+    const elements = value.map(f =>
+      `ROW(${escapeLiteral(f.bucket_id)},${escapeLiteral(f.file_path)})::file_attachment`
+    ).join(',');
+    return sql.raw(`ARRAY[${elements}]::file_attachment[]`);
+  },
+  fromDriver(value: string): FileAttachment[] {
+    if (!value || value === '{}') return [];
+    const inner = value.slice(1, -1);
+    const matches = inner.match(/\([^)]*\)/g) || [];
+    return matches.map(m => {
+      const [bucketId, filePath] = m.slice(1, -1).split(',');
+      return { bucket_id: bucketId.trim(), file_path: filePath.trim() };
+    });
+  },
+});
+
+export const archiveComment = pgTable("archive_comment", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  commentid: varchar("commentid", { length: 50 }).notNull().unique(),
+  linkid: varchar("linkid", { length: 50 }).notNull(),
+  rootCommentId: varchar("root_comment_id", { length: 50 }),
+  replyid: varchar("replyid", { length: 50 }),
+  floor: integer("floor"),
+  text: text("text"),
+  createAt: customTimestamptz("create_at", { precision: 3 }),
+  up: integer("up").notNull().default(0),
+  isSupport: boolean("is_support").notNull().default(false),
+  isAuthor: boolean("is_author").notNull().default(false),
+  childNum: integer("child_num").notNull().default(0),
+  hasMore: boolean("has_more").notNull().default(false),
+  imageUrls: text("image_urls").array().notNull().default([]),
+  localImagePaths: text("local_image_paths").array().notNull().default([]),
+  userid: varchar("userid", { length: 50 }),
+  username: varchar("username", { length: 255 }),
+  userAvatar: text("user_avatar"),
+  userLevel: integer("user_level"),
+  replyUserid: varchar("reply_userid", { length: 50 }),
+  replyUsername: varchar("reply_username", { length: 255 }),
+  /**
+   * @type { Record<string, any> }
+   */
+  rawData: jsonb("raw_data").notNull().default('{}'),
+  crawlStatus: varchar("crawl_status", { length: 20 }).notNull().default('ok'),
+  crawlError: text("crawl_error"),
+  // System field: Creation time (auto-filled, do not modify)
+  createdAt: customTimestamptz("_created_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Creator (auto-filled, do not modify)
+  createdBy: userProfile("_created_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+  // System field: Update time (auto-filled, do not modify)
+  updatedAt: customTimestamptz("_updated_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Updater (auto-filled, do not modify)
+  updatedBy: userProfile("_updated_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+}, (table) => [
+  uniqueIndex("archive_comment_commentid_key").on(table.commentid),
+  index("idx_archive_comment_linkid").on(table.linkid),
+  index("idx_archive_comment_root").on(table.rootCommentId),
+  index("idx_archive_comment_floor").on(table.linkid, table.floor),
+  index("idx_archive_comment_create_at").on(table.createAt),
+  index("idx_archive_comment_crawl_status").on(table.crawlStatus),
+]);
+
+export const syncJob = pgTable("sync_job", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobType: varchar("job_type", { length: 50 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default('pending'),
+  total: integer("total").notNull().default(0),
+  processed: integer("processed").notNull().default(0),
+  successCount: integer("success_count").notNull().default(0),
+  failCount: integer("fail_count").notNull().default(0),
+  errorMessage: text("error_message"),
+  startedAt: customTimestamptz("started_at", { precision: 3 }),
+  finishedAt: customTimestamptz("finished_at", { precision: 3 }),
+  // System field: Creation time (auto-filled, do not modify)
+  createdAt: customTimestamptz("_created_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Creator (auto-filled, do not modify)
+  createdBy: userProfile("_created_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+  // System field: Update time (auto-filled, do not modify)
+  updatedAt: customTimestamptz("_updated_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Updater (auto-filled, do not modify)
+  updatedBy: userProfile("_updated_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+}, (table) => [
+  index("idx_sync_job_type_status").on(table.jobType, table.status),
+]);
+
+export const archiveItemTag = pgTable("archive_item_tag", {
+  itemId: uuid("item_id").primaryKey(),
+  tagId: uuid("tag_id").primaryKey(),
+}, (table) => [
+  index("idx_archive_item_tag_item_id").on(table.itemId),
+  index("idx_archive_item_tag_tag_id").on(table.tagId),
+  foreignKey({
+    columns: [table.itemId],
+    foreignColumns: [archiveItem.id],
+    name: "archive_item_tag_item_id_fkey",
+  }).onDelete("cascade"),
+  foreignKey({
+    columns: [table.tagId],
+    foreignColumns: [archiveTag.id],
+    name: "archive_item_tag_tag_id_fkey",
+  }).onDelete("cascade"),
+]);
+
+export const archiveTag = pgTable("archive_tag", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  color: varchar("color", { length: 20 }).notNull().default('#6b7280'),
+  // System field: Creation time (auto-filled, do not modify)
+  createdAt: customTimestamptz("_created_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Creator (auto-filled, do not modify)
+  createdBy: userProfile("_created_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+  // System field: Update time (auto-filled, do not modify)
+  updatedAt: customTimestamptz("_updated_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Updater (auto-filled, do not modify)
+  updatedBy: userProfile("_updated_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+}, (table) => [
+  uniqueIndex("archive_tag_name_key").on(table.name),
+  index("idx_archive_tag_name").on(table.name),
+]);
+
+export const archiveItem = pgTable("archive_item", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  linkid: varchar("linkid", { length: 50 }).notNull().unique(),
+  title: text("title"),
+  summary: text("summary"),
+  category: varchar("category", { length: 100 }),
+  shareUrl: text("share_url"),
+  coverUrl: text("cover_url"),
+  localCoverPath: text("local_cover_path"),
+  authorName: varchar("author_name", { length: 255 }),
+  authorAvatar: text("author_avatar"),
+  originalTags: text("original_tags").array().notNull().default([]),
+  /**
+   * @type { Record<string, any> }
+   */
+  rawData: jsonb("raw_data").notNull().default('{}'),
+  sourceCreateAt: customTimestamptz("source_create_at", { precision: 3 }),
+  aiTaggedAt: customTimestamptz("ai_tagged_at", { precision: 3 }),
+  aiTagError: text("ai_tag_error"),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+  // System field: Creation time (auto-filled, do not modify)
+  createdAt: customTimestamptz("_created_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Creator (auto-filled, do not modify)
+  createdBy: userProfile("_created_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+  // System field: Update time (auto-filled, do not modify)
+  updatedAt: customTimestamptz("_updated_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Updater (auto-filled, do not modify)
+  updatedBy: userProfile("_updated_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+}, (table) => [
+  uniqueIndex("archive_item_linkid_key").on(table.linkid),
+  index("idx_archive_item_category").on(table.category),
+  index("idx_archive_item_linkid").on(table.linkid),
+  index("idx_archive_item_source_create_at").on(table.sourceCreateAt),
+  index("idx_archive_item_created_at").on(table.createdAt),
+  index("idx_archive_item_is_deleted").on(table.isDeleted),
+]);
+
+export const archiveSettings = pgTable("archive_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  heyboxCookie: text("heybox_cookie").notNull(),
+  openaiBaseUrl: varchar("openai_base_url", { length: 500 }).notNull().default('https://api.openai.com/v1'),
+  openaiApiKey: text("openai_api_key").notNull(),
+  openaiModel: varchar("openai_model", { length: 100 }).notNull().default('gpt-4o-mini'),
+  openaiTemperature: real("openai_temperature").notNull().default(0.7),
+  // System field: Creation time (auto-filled, do not modify)
+  createdAt: customTimestamptz("_created_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Creator (auto-filled, do not modify)
+  createdBy: userProfile("_created_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+  // System field: Update time (auto-filled, do not modify)
+  updatedAt: customTimestamptz("_updated_at", { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  // System field: Updater (auto-filled, do not modify)
+  updatedBy: userProfile("_updated_by").default(sql`CASE
+    WHEN (current_setting('app.user_id'::text, true) = ''::text) THEN NULL`),
+});
+
+// table aliases
+export const archiveCommentTable = archiveComment;
+export const archiveItemTable = archiveItem;
+export const archiveItemTagTable = archiveItemTag;
+export const archiveSettingsTable = archiveSettings;
+export const archiveTagTable = archiveTag;
+export const syncJobTable = syncJob;

@@ -1,0 +1,19 @@
+{
+  "cases": [
+    {
+      "id": 1,
+      "priority": "p0",
+      "description": "浏览页侧栏显示「导出静态站点」按钮，点击后触发下载"
+    },
+    {
+      "id": 2,
+      "priority": "p1",
+      "description": "浏览页正常渲染：左侧栏分类/标签、瀑布流卡片、顶部搜索栏"
+    },
+    {
+      "id": 3,
+      "priority": "p1",
+      "description": "静态导出 zip 下载接口返回 200 且包含 index.html 和 data/archive.js"
+    }
+  ]
+}

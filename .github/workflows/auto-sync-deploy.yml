@@ -1,0 +1,66 @@
+name: Auto Sync and Deploy
+
+on:
+  schedule:
+    # 每天 UTC 2:00 运行（北京时间 10:00）
+    - cron: '0 2 * * *'
+  # 允许手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build application
+        run: |
+          npm run build:server
+          npm run build:client
+          cp dist/client/client/index.html dist/client/index.html
+
+      - name: Run auto sync and export
+        env:
+          # 从 GitHub Secrets 读取配置
+          HEYBOX_COOKIE: ${{ secrets.HEYBOX_COOKIE }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE }}
+          # 应用配置
+          FORCE_AUTHN_INNERAPI_DOMAIN: http://localhost:3000
+          NODE_ENV: production
+          PORT: '3000'
+        run: node scripts/auto-sync.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./exported-site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Output deployment URL
+        run: echo "Deployed to ${{ steps.deployment.outputs.page_url }}"
