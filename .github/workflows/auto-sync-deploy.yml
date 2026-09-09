@@ -27,7 +27,13 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        run: |
+          # 删除 lock 文件避免 npm 可选依赖 bug（rolldown 原生绑定问题）
+          rm -f package-lock.json
+          rm -rf node_modules
+          npm install --legacy-peer-deps
+          # 显式安装 Linux 平台的 rolldown 绑定
+          npm install @rolldown/binding-linux-x64-gnu --no-save --legacy-peer-deps || true
 
       - name: Build application
         run: |
