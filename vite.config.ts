@@ -7,4 +7,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'client/src'),
     },
   },
+  build: {
+    rolldownOptions: {
+      external: ['antd'],
+    },
+  },
 });
