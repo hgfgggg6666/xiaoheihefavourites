@@ -6,8 +6,12 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies (skip postinstall hooks)
-RUN npm install --ignore-scripts
+# Remove package-lock.json to avoid npm optional dependencies bug with rolldown
+# Then install dependencies (skip postinstall hooks)
+RUN rm -f package-lock.json && npm install --ignore-scripts
+
+# Explicitly install rolldown Linux native binding (workaround for npm optional deps bug)
+RUN npm install @rolldown/binding-linux-x64-gnu --ignore-scripts --no-save || true
 
 # Copy source code
 COPY . .
@@ -22,7 +26,7 @@ WORKDIR /app
 
 # Install production dependencies
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
+RUN rm -f package-lock.json && npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy build artifacts
 COPY --from=builder /app/dist ./dist
