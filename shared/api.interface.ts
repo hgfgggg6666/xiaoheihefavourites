@@ -8,6 +8,13 @@ export interface SettingsResponse {
   openaiTemperature: number;
   hasHeyboxCookie: boolean;
   hasOpenaiKey: boolean;
+  crawlTopicEnabled: boolean;
+  topicLinkId: string;
+  autoSyncEnabled: boolean;
+  autoSyncInterval: number;
+  lastAutoSyncAt: Date | null;
+  autoSyncStatus: string;
+  autoSyncError: string | null;
 }
 
 export interface UpdateSettingsRequest {
@@ -16,6 +23,10 @@ export interface UpdateSettingsRequest {
   openaiApiKey?: string;
   openaiModel?: string;
   openaiTemperature?: number;
+  crawlTopicEnabled?: boolean;
+  topicLinkId?: string;
+  autoSyncEnabled?: boolean;
+  autoSyncInterval?: number;
 }
 
 export interface TestHeyboxResponse {

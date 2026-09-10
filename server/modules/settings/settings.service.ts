@@ -23,6 +23,13 @@ type FullSettings = {
   openaiApiKey: string;
   openaiModel: string;
   openaiTemperature: number;
+  crawlTopicEnabled: boolean;
+  topicLinkId: string;
+  autoSyncEnabled: boolean;
+  autoSyncInterval: number;
+  lastAutoSyncAt: Date | null;
+  autoSyncStatus: string;
+  autoSyncError: string | null;
 };
 
 @Injectable()
@@ -42,6 +49,13 @@ export class SettingsService {
       openaiTemperature: row.openaiTemperature,
       hasHeyboxCookie: row.heyboxCookie.length > 0,
       hasOpenaiKey: row.openaiApiKey.length > 0,
+      crawlTopicEnabled: row.crawlTopicEnabled,
+      topicLinkId: row.topicLinkId,
+      autoSyncEnabled: row.autoSyncEnabled,
+      autoSyncInterval: row.autoSyncInterval,
+      lastAutoSyncAt: row.lastAutoSyncAt,
+      autoSyncStatus: row.autoSyncStatus,
+      autoSyncError: row.autoSyncError,
     };
   }
 
@@ -53,13 +67,20 @@ export class SettingsService {
   async getFullSettings(): Promise<FullSettings> {
     const rows = await this.db.select().from(archiveSettings).limit(1);
     if (rows.length > 0) {
-      const row = rows[0];
+      const row = rows[0] as any;
       return {
         heyboxCookie: row.heyboxCookie,
         openaiBaseUrl: row.openaiBaseUrl,
         openaiApiKey: row.openaiApiKey,
         openaiModel: row.openaiModel,
         openaiTemperature: row.openaiTemperature,
+        crawlTopicEnabled: Boolean(row.crawlTopicEnabled),
+        topicLinkId: row.topicLinkId || '416158',
+        autoSyncEnabled: Boolean(row.autoSyncEnabled),
+        autoSyncInterval: Number(row.autoSyncInterval) || 30,
+        lastAutoSyncAt: row.lastAutoSyncAt ? new Date(row.lastAutoSyncAt) : null,
+        autoSyncStatus: row.autoSyncStatus || 'idle',
+        autoSyncError: row.autoSyncError || null,
       };
     }
     const inserted = await this.db
@@ -70,15 +91,29 @@ export class SettingsService {
         openaiApiKey: '',
         openaiModel: 'gpt-4o-mini',
         openaiTemperature: 0.7,
+        crawlTopicEnabled: false,
+        topicLinkId: '416158',
+        autoSyncEnabled: false,
+        autoSyncInterval: 30,
+        lastAutoSyncAt: null,
+        autoSyncStatus: 'idle',
+        autoSyncError: null,
       })
       .returning();
-    const row = inserted[0];
+    const row = inserted[0] as any;
     return {
       heyboxCookie: row.heyboxCookie,
       openaiBaseUrl: row.openaiBaseUrl,
       openaiApiKey: row.openaiApiKey,
       openaiModel: row.openaiModel,
       openaiTemperature: row.openaiTemperature,
+      crawlTopicEnabled: Boolean(row.crawlTopicEnabled),
+      topicLinkId: row.topicLinkId || '416158',
+      autoSyncEnabled: Boolean(row.autoSyncEnabled),
+      autoSyncInterval: Number(row.autoSyncInterval) || 30,
+      lastAutoSyncAt: row.lastAutoSyncAt ? new Date(row.lastAutoSyncAt) : null,
+      autoSyncStatus: row.autoSyncStatus || 'idle',
+      autoSyncError: row.autoSyncError || null,
     };
   }
 
@@ -96,31 +131,44 @@ export class SettingsService {
     if (dto.openaiApiKey !== undefined) patch.openaiApiKey = dto.openaiApiKey;
     if (dto.openaiModel !== undefined) patch.openaiModel = dto.openaiModel;
     if (dto.openaiTemperature !== undefined) patch.openaiTemperature = dto.openaiTemperature;
+    if (dto.crawlTopicEnabled !== undefined) patch.crawlTopicEnabled = dto.crawlTopicEnabled;
+    if (dto.topicLinkId !== undefined) patch.topicLinkId = dto.topicLinkId;
+    if (dto.autoSyncEnabled !== undefined) patch.autoSyncEnabled = dto.autoSyncEnabled;
+    if (dto.autoSyncInterval !== undefined) patch.autoSyncInterval = dto.autoSyncInterval;
 
     if (Object.keys(patch).length === 0) {
-      return this.toResponse({
-        heyboxCookie: existing.heyboxCookie,
-        openaiBaseUrl: existing.openaiBaseUrl,
-        openaiApiKey: existing.openaiApiKey,
-        openaiModel: existing.openaiModel,
-        openaiTemperature: existing.openaiTemperature,
-      });
+      return this.getSettings();
     }
 
-    const updated = await this.db
+    await this.db
       .update(archiveSettings)
       .set(patch)
-      .where(eq(archiveSettings.id, existing.id))
-      .returning();
+      .where(eq(archiveSettings.id, existing.id));
 
-    const row = updated[0] ?? existing;
-    return this.toResponse({
-      heyboxCookie: row.heyboxCookie,
-      openaiBaseUrl: row.openaiBaseUrl,
-      openaiApiKey: row.openaiApiKey,
-      openaiModel: row.openaiModel,
-      openaiTemperature: row.openaiTemperature,
-    });
+    return this.getSettings();
+  }
+
+  /**
+   * 更新自动同步状态
+   */
+  async updateAutoSyncStatus(status: string, error?: string): Promise<void> {
+    const rows = await this.db.select().from(archiveSettings).limit(1);
+    if (rows.length === 0) return;
+    const patch: any = { autoSyncStatus: status };
+    if (error !== undefined) patch.autoSyncError = error;
+    await this.db.update(archiveSettings).set(patch).where(eq(archiveSettings.id, rows[0].id));
+  }
+
+  /**
+   * 更新上次自动同步时间
+   */
+  async updateLastAutoSyncAt(): Promise<void> {
+    const rows = await this.db.select().from(archiveSettings).limit(1);
+    if (rows.length === 0) return;
+    await this.db
+      .update(archiveSettings)
+      .set({ lastAutoSyncAt: new Date() })
+      .where(eq(archiveSettings.id, rows[0].id));
   }
 
   private async httpGet(urlStr: string, headers: Record<string, string>): Promise<string> {

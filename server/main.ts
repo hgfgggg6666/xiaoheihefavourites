@@ -8,6 +8,17 @@ import cookieParser from 'cookie-parser';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
+// 全局异常处理，防止未捕获的异常导致应用崩溃
+process.on('uncaughtException', (err) => {
+  console.error('未捕获的异常:', err);
+  // 不退出进程，继续运行
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('未处理的 Promise 拒绝:', reason);
+  // 不退出进程，继续运行
+});
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   logger.log('开始初始化应用...');
@@ -18,7 +29,7 @@ async function bootstrap() {
 
   logger.log('NestFactory 创建成功，开始配置中间件...');
 
-  const host = process.env.SERVER_HOST || 'localhost';
+  const host = process.env.SERVER_HOST || '0.0.0.0';
   const port = Number(process.env.SERVER_PORT || process.env.PORT || '3000');
 
   // 基础中间件（替代飞书 configureApp，绕过平台认证/CSRF）

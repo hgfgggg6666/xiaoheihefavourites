@@ -11,11 +11,12 @@ import './index.css';
 import { createPortal } from 'react-dom';
 import { Toaster } from '@client/src/components/ui/sonner';
 
-const CLIENT_BASE_PATH = process.env.CLIENT_BASE_PATH || '/';
+// 路由 basename（页面访问路径）
+const ROUTER_BASENAME = '/app/';
 
 const MainApp = () => {
   return (
-    <BrowserRouter basename={CLIENT_BASE_PATH}>
+    <BrowserRouter basename={ROUTER_BASENAME}>
       <AppContainer defaultTheme="light">
         <ErrorBoundary
           fallbackRender={({ error, resetErrorBoundary }) => (

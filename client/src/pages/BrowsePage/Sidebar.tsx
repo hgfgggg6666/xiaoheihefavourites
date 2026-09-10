@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { heyboxApi, aiTagApi, archivesApi, commentsApi, staticExportApi } from '@client/src/api';
 import type { StatsResponse, ArchiveTag, SyncJob } from '@shared/api.interface';
@@ -178,8 +177,8 @@ export default function Sidebar({
   const displayedTags = showAllTags ? tags : tags.slice(0, TAG_PREVIEW_COUNT);
 
   return (
-    <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-border/50 bg-sidebar">
-      <ScrollArea className="flex-1">
+    <aside className="flex h-[100dvh] w-[260px] shrink-0 flex-col border-r border-border/50 bg-sidebar">
+      <div className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-1 p-3">
           {/* 快速筛选 */}
           <SidebarSectionLabel>快速筛选</SidebarSectionLabel>
@@ -268,7 +267,7 @@ export default function Sidebar({
             </>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* 操作区 */}
       <div className="flex flex-col gap-2 border-t border-sidebar-border p-3">
@@ -284,6 +283,45 @@ export default function Sidebar({
             ? `同步中 ${syncProgress.processed}/${syncProgress.total}`
             : '同步收藏'}
         </Button>
+        {/* 同步实时进度 */}
+        {syncProgress && (syncProgress.status === 'running' || syncProgress.status === 'success') && (
+          <div className="rounded-md bg-muted/50 p-2 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">
+                {syncProgress.status === 'running' ? '同步进行中' : '同步完成'}
+              </span>
+              <span className="text-muted-foreground">
+                {syncProgress.total > 0
+                  ? `${Math.round((syncProgress.processed / syncProgress.total) * 100)}%`
+                  : '0%'}
+              </span>
+            </div>
+            {/* 进度条 */}
+            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  syncProgress.status === 'success' ? 'bg-green-500' : 'bg-primary'
+                }`}
+                style={{
+                  width: syncProgress.total > 0
+                    ? `${Math.min(100, (syncProgress.processed / syncProgress.total) * 100)}%`
+                    : '0%',
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {syncProgress.processed}/{syncProgress.total} 条
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="text-green-600">✓ {syncProgress.successCount || 0}</span>
+                {(syncProgress.failCount || 0) > 0 && (
+                  <span className="text-red-500">✗ {syncProgress.failCount}</span>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
         <Button
           variant="secondary"
           size="sm"
@@ -431,7 +469,7 @@ function useSyncPolling(
     void tick();
     intervalRef.current = window.setInterval(() => {
       void tick();
-    }, 2000);
+    }, 1000);
   }, [tick, stop]);
 
   useEffect(() => stop, [stop]);

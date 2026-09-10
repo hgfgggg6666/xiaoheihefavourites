@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS archive_item (
   source_create_at TEXT,
   ai_tagged_at TEXT,
   ai_tag_error TEXT,
+  comment_crawled_at TEXT,
   is_deleted INTEGER NOT NULL DEFAULT 0,
   _created_at TEXT NOT NULL DEFAULT (datetime('now')),
   _created_by TEXT,
@@ -117,12 +118,31 @@ CREATE TABLE IF NOT EXISTS archive_settings (
   openai_api_key TEXT NOT NULL,
   openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
   openai_temperature REAL NOT NULL DEFAULT 0.7,
+  crawl_topic_enabled INTEGER NOT NULL DEFAULT 0,
+  topic_link_id TEXT NOT NULL DEFAULT '416158',
+  auto_sync_enabled INTEGER NOT NULL DEFAULT 0,
+  auto_sync_interval INTEGER NOT NULL DEFAULT 30,
+  last_auto_sync_at TEXT,
+  auto_sync_status TEXT NOT NULL DEFAULT 'idle',
+  auto_sync_error TEXT,
   _created_at TEXT NOT NULL DEFAULT (datetime('now')),
   _created_by TEXT,
   _updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   _updated_by TEXT
 );
 `;
+
+// 迁移：为已有数据库添加新字段（每条语句独立执行，避免一条失败导致全部回滚）
+const MIGRATION_STATEMENTS = [
+  'ALTER TABLE archive_settings ADD COLUMN crawl_topic_enabled INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE archive_settings ADD COLUMN topic_link_id TEXT NOT NULL DEFAULT \'416158\'',
+  'ALTER TABLE archive_settings ADD COLUMN auto_sync_enabled INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE archive_settings ADD COLUMN auto_sync_interval INTEGER NOT NULL DEFAULT 30',
+  'ALTER TABLE archive_settings ADD COLUMN last_auto_sync_at TEXT',
+  'ALTER TABLE archive_settings ADD COLUMN auto_sync_status TEXT NOT NULL DEFAULT \'idle\'',
+  'ALTER TABLE archive_settings ADD COLUMN auto_sync_error TEXT',
+  'ALTER TABLE archive_item ADD COLUMN comment_crawled_at TEXT',
+];
 
 @Global()
 @Module({
@@ -142,6 +162,17 @@ CREATE TABLE IF NOT EXISTS archive_settings (
 
         // 自动建表
         sqlite.exec(INIT_SQL);
+
+        // 执行迁移（为已有数据库添加新字段，每条语句独立执行，忽略已存在的错误）
+        MIGRATION_STATEMENTS.forEach((sql) => {
+          try {
+            sqlite.exec(sql);
+          } catch (e) {
+            // 字段已存在，忽略
+          }
+        });
+        logger.log('Migration completed');
+
         logger.log('Database tables initialized');
 
         const db = drizzle(sqlite);

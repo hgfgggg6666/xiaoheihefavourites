@@ -15,6 +15,7 @@ import { HeyboxModule } from './modules/heybox/heybox.module';
 import { AiTagModule } from './modules/ai-tag/ai-tag.module';
 import { ArchivesModule } from './modules/archives/archives.module';
 import { StaticExportModule } from './modules/static-export/static-export.module';
+import { AutoSyncModule } from './modules/auto-sync/auto-sync.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { StaticExportModule } from './modules/static-export/static-export.module
     AiTagModule,
     ArchivesModule,
     StaticExportModule,
+    AutoSyncModule,
     // ====== @route-section: business-modules END ======
 
     ViewModule,

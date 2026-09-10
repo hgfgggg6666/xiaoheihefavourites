@@ -76,6 +76,19 @@ const SettingsPage = () => {
   const [hasOpenaiKey, setHasOpenaiKey] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // 专区爬取设置
+  const [crawlTopicEnabled, setCrawlTopicEnabled] = useState(false);
+  const [topicLinkId, setTopicLinkId] = useState('416158');
+  const [topicSaving, setTopicSaving] = useState(false);
+
+  // 自动同步设置
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [autoSyncInterval, setAutoSyncInterval] = useState(30);
+  const [autoSyncStatus, setAutoSyncStatus] = useState('idle');
+  const [lastAutoSyncAt, setLastAutoSyncAt] = useState<Date | null>(null);
+  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
+  const [autoSyncSaving, setAutoSyncSaving] = useState(false);
+
   const [heyboxTesting, setHeyboxTesting] = useState(false);
   const [heyboxSaving, setHeyboxSaving] = useState(false);
   const [heyboxResult, setHeyboxResult] = useState<TestResult | null>(null);
@@ -114,6 +127,13 @@ const SettingsPage = () => {
         });
         setHasHeyboxCookie(s.hasHeyboxCookie);
         setHasOpenaiKey(s.hasOpenaiKey);
+        setCrawlTopicEnabled(s.crawlTopicEnabled || false);
+        setTopicLinkId(s.topicLinkId || '416158');
+        setAutoSyncEnabled(s.autoSyncEnabled || false);
+        setAutoSyncInterval(s.autoSyncInterval || 30);
+        setAutoSyncStatus(s.autoSyncStatus || 'idle');
+        setLastAutoSyncAt(s.lastAutoSyncAt || null);
+        setAutoSyncError(s.autoSyncError || null);
       } catch (err) {
         logger.error('load settings failed', err as Error);
         toast.error('加载设置失败');
@@ -189,6 +209,40 @@ const SettingsPage = () => {
       toast.error('保存失败，请稍后重试');
     } finally {
       setOpenaiSaving(false);
+    }
+  };
+
+  const handleSaveTopic = async (): Promise<void> => {
+    setTopicSaving(true);
+    try {
+      const req: UpdateSettingsRequest = {
+        crawlTopicEnabled,
+        topicLinkId,
+      };
+      await updateSettings(req);
+      toast.success(crawlTopicEnabled ? '已开启情投意合专区爬取' : '已关闭情投意合专区爬取');
+    } catch (err) {
+      logger.error('save topic settings failed', err as Error);
+      toast.error('保存失败，请稍后重试');
+    } finally {
+      setTopicSaving(false);
+    }
+  };
+
+  const handleSaveAutoSync = async (): Promise<void> => {
+    setAutoSyncSaving(true);
+    try {
+      const req: UpdateSettingsRequest = {
+        autoSyncEnabled,
+        autoSyncInterval: Number(autoSyncInterval) || 30,
+      };
+      await updateSettings(req);
+      toast.success(autoSyncEnabled ? `已开启自动同步（每 ${autoSyncInterval} 秒）` : '已关闭自动同步');
+    } catch (err) {
+      logger.error('save auto sync settings failed', err as Error);
+      toast.error('保存失败，请稍后重试');
+    } finally {
+      setAutoSyncSaving(false);
     }
   };
 
@@ -468,6 +522,198 @@ const SettingsPage = () => {
                   </div>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+
+          {/* 情投意合专区爬取配置 */}
+          <Card className="rounded-lg shadow-sm border border-border/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="font-semibold text-base">
+                    情投意合专区爬取
+                  </CardTitle>
+                  <CardDescription className="text-sm mt-1">
+                    开启后，同步收藏夹时会同时爬取情投意合专区的内容，单独分类存放
+                  </CardDescription>
+                </div>
+                <Badge variant={crawlTopicEnabled ? 'default' : 'secondary'}>
+                  {crawlTopicEnabled ? '已开启' : '已关闭'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">启用专区爬取</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      同步收藏夹时自动爬取情投意合专区内容
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCrawlTopicEnabled((p) => !p)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                      crawlTopicEnabled ? 'bg-primary' : 'bg-muted'
+                    }`}
+                    aria-label={crawlTopicEnabled ? '关闭' : '开启'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        crawlTopicEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">专区 Link ID</label>
+                  <Input
+                    type="text"
+                    value={topicLinkId}
+                    onChange={(e) => setTopicLinkId(e.target.value)}
+                    placeholder="416158"
+                    disabled={!crawlTopicEnabled}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    情投意合专区页面 URL 中的 link ID，默认为 416158
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleSaveTopic}
+                    disabled={topicSaving}
+                  >
+                    {topicSaving && <Loader2 className="size-4 animate-spin" />}
+                    保存设置
+                  </Button>
+                </div>
+
+                <Alert>
+                  <AlertTitle>使用说明</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    开启后，点击「同步收藏夹」按钮时会同时爬取情投意合专区的内容。
+                    专区内容会单独标记为「情投意合」分类，可以在浏览页按分类筛选查看。
+                    专区内容同样支持下载图片、抓取评论和 AI 打标签。
+                  </AlertDescription>
+                </Alert>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 自动同步配置 */}
+          <Card className="rounded-lg shadow-sm border border-border/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="font-semibold text-base">
+                    自动同步
+                  </CardTitle>
+                  <CardDescription className="text-sm mt-1">
+                    开启后，每隔指定时间自动执行：同步收藏 → 下载图片 → 抓取评论
+                  </CardDescription>
+                </div>
+                <Badge variant={autoSyncEnabled ? 'default' : 'secondary'}>
+                  {autoSyncEnabled ? '已开启' : '已关闭'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">启用自动同步</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      自动执行同步收藏、下载图片、抓取评论
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutoSyncEnabled((p) => !p)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                      autoSyncEnabled ? 'bg-primary' : 'bg-muted'
+                    }`}
+                    aria-label={autoSyncEnabled ? '关闭' : '开启'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoSyncEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">同步间隔（秒）</label>
+                  <Input
+                    type="number"
+                    value={autoSyncInterval}
+                    onChange={(e) => setAutoSyncInterval(Number(e.target.value) || 30)}
+                    min={10}
+                    disabled={!autoSyncEnabled}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    自动同步的时间间隔，最小 10 秒，默认 30 秒
+                  </p>
+                </div>
+
+                {/* 自动同步状态 */}
+                <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">当前状态</span>
+                    <Badge variant={
+                      autoSyncStatus === 'running' || autoSyncStatus === 'syncing' || autoSyncStatus === 'downloading' || autoSyncStatus === 'comments'
+                        ? 'default'
+                        : autoSyncStatus === 'error'
+                          ? 'destructive'
+                          : 'secondary'
+                    }>
+                      {autoSyncStatus === 'idle' && '空闲'}
+                      {autoSyncStatus === 'running' && '运行中'}
+                      {autoSyncStatus === 'syncing' && '同步收藏中...'}
+                      {autoSyncStatus === 'downloading' && '下载图片中...'}
+                      {autoSyncStatus === 'comments' && '抓取评论中...'}
+                      {autoSyncStatus === 'error' && '出错'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">上次同步时间</span>
+                    <span className="text-xs">
+                      {lastAutoSyncAt ? new Date(lastAutoSyncAt).toLocaleString('zh-CN') : '从未同步'}
+                    </span>
+                  </div>
+                  {autoSyncError && (
+                    <div className="text-xs text-red-500 mt-1">
+                      错误：{autoSyncError}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleSaveAutoSync}
+                    disabled={autoSyncSaving}
+                  >
+                    {autoSyncSaving && <Loader2 className="size-4 animate-spin" />}
+                    保存设置
+                  </Button>
+                </div>
+
+                <Alert>
+                  <AlertTitle>使用说明</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    开启自动同步后，系统会每隔指定时间自动执行以下操作：
+                    1. 同步小黑盒收藏夹（含情投意合专区）
+                    2. 下载所有帖子的正文图片到本地
+                    3. 抓取所有帖子的评论
+                    自动同步在后台运行，不影响正常使用。建议保持应用运行状态。
+                  </AlertDescription>
+                </Alert>
+              </div>
             </CardContent>
           </Card>
         </div>

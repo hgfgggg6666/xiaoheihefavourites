@@ -63,3 +63,14 @@ pnpm-lock.yaml
 # Agent files
 .agent/
 .npm_cache
+
+# Data and media (local only, not for git)
+/data/
+/media/
+*.db
+*.db-shm
+*.db-wal
+
+# App logs
+app-start*.log
+start.bat

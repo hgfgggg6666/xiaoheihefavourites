@@ -2,7 +2,7 @@
 import { FileService } from '@lark-apaas/fullstack-nestjs-core';
 import { LOCAL_SQLITE_DB } from '../../database/sqlite.module';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { eq, desc, and, count, notInArray } from 'drizzle-orm';
+import { eq, desc, and, count, notInArray, isNotNull } from 'drizzle-orm';
 import { archiveComment, archiveItem, syncJob } from '@server/database/schema';
 import {
   buildHeyboxUrl,
@@ -387,6 +387,16 @@ export class CommentService {
     }
   }
 
+  /**
+   * 标记帖子的评论已经抓取过（即使没有评论也会标记，避免重复抓取）
+   */
+  async markItemCommentCrawled(linkid: string): Promise<void> {
+    await this.db
+      .update(archiveItem)
+      .set({ commentCrawledAt: new Date() })
+      .where(eq(archiveItem.linkid, linkid));
+  }
+
   async getItemCrawlStatus(linkid: string): Promise<'done' | 'running' | 'pending' | 'captcha' | 'none'> {
     const [countRow] = await this.db
       .select({ count: count() })
@@ -425,7 +435,7 @@ export class CommentService {
     const maxRetries = 3;
 
     while (true) {
-      await CommentService.sleep(200 + Math.floor(Math.random() * 200));
+      await CommentService.sleep(10 + Math.floor(Math.random() * 20));
 
       try {
         const result = await this.fetchLinkTreePage(cookie, linkid, page, limit);
@@ -508,8 +518,8 @@ export class CommentService {
       }
     }
 
-    // 楼中楼并发抓取（并发数 3）
-    const SUB_CONCURRENCY = 3;
+    // 楼中楼并发抓取（并发数 10）
+    const SUB_CONCURRENCY = 10;
     for (let i = 0; i < rootCommentIds.length; i += SUB_CONCURRENCY) {
       const batch = rootCommentIds.slice(i, i + SUB_CONCURRENCY);
       const batchResults = await Promise.allSettled(
@@ -526,6 +536,17 @@ export class CommentService {
           this.logger.warn(`楼中楼抓取失败: ${err.message}`);
           failCount += 1;
         }
+      }
+    }
+
+    // 标记帖子的评论已经抓取过（即使没有评论也会标记，避免重复抓取）
+    // 只有在没有触发验证码的情况下才标记
+    if (!captcha) {
+      try {
+        await this.markItemCommentCrawled(linkid);
+      } catch (e) {
+        const err = e as Error;
+        this.logger.warn(`标记评论抓取状态失败 linkid=${linkid}: ${err.message}`);
       }
     }
 
@@ -549,7 +570,15 @@ export class CommentService {
     if (item.length === 0) return;
 
     try {
-      const currentRaw = JSON.parse(item[0].rawData as string || '{}');
+      // rawData 可能已经是对象（Drizzle 自动解析），也可能是字符串
+      let currentRaw: any;
+      if (typeof item[0].rawData === 'string') {
+        currentRaw = JSON.parse(item[0].rawData || '{}');
+      } else if (item[0].rawData && typeof item[0].rawData === 'object') {
+        currentRaw = item[0].rawData;
+      } else {
+        currentRaw = {};
+      }
       // 合并帖子详情，完整正文会覆盖被截断的 description
       const mergedRaw = { ...currentRaw, ...linkDetail, full_detail: true };
 
@@ -578,7 +607,7 @@ export class CommentService {
     const maxRetries = 2;
 
     while (true) {
-      await CommentService.sleep(150 + Math.floor(Math.random() * 150));
+      await CommentService.sleep(10 + Math.floor(Math.random() * 20));
 
       try {
         const result = await this.fetchSubComments(cookie, rootCommentId, lastval);
@@ -644,6 +673,7 @@ export class CommentService {
   async startCommentCrawl(
     mode: 'all' | 'uncrawled' | 'single',
     linkid?: string,
+    maxItems?: number,
   ): Promise<string> {
     const now = new Date();
     const created = await this.db
@@ -660,7 +690,7 @@ export class CommentService {
       .returning({ id: syncJob.id });
 
     const jobId: string = created[0].id;
-    void this.runCommentCrawl(jobId, mode, linkid);
+    void this.runCommentCrawl(jobId, mode, linkid, maxItems);
     return jobId;
   }
 
@@ -668,8 +698,9 @@ export class CommentService {
     jobId: string,
     mode: 'all' | 'uncrawled' | 'single',
     linkid?: string,
+    maxItems?: number,
   ): Promise<void> {
-    this.logger.log(`开始评论抓取任务: ${jobId}, mode=${mode}`);
+    this.logger.log(`开始评论抓取任务: ${jobId}, mode=${mode}, maxItems=${maxItems ?? '全部'}`);
 
     try {
       const settings = await this.settingsService.getFullSettings();
@@ -688,11 +719,11 @@ export class CommentService {
           .from(archiveItem)
           .where(eq(archiveItem.linkid, linkid));
       } else if (mode === 'uncrawled') {
+        // 查询已经抓取过评论的帖子（comment_crawled_at 不为空）
         const crawled = this.db
-          .select({ linkid: archiveComment.linkid })
-          .from(archiveComment)
-          .where(eq(archiveComment.crawlStatus, 'ok'))
-          .groupBy(archiveComment.linkid);
+          .select({ linkid: archiveItem.linkid })
+          .from(archiveItem)
+          .where(isNotNull(archiveItem.commentCrawledAt));
 
         const crawledLinkids = (await crawled).map((r: { linkid: string }) => r.linkid);
 
@@ -714,6 +745,12 @@ export class CommentService {
           .orderBy(desc(archiveItem.createdAt));
       }
 
+      // 如果设置了最大处理数量，只取前 maxItems 个
+      if (maxItems && targetItems.length > maxItems) {
+        targetItems = targetItems.slice(0, maxItems);
+        this.logger.log(`评论抓取: 限制最大处理数量为 ${maxItems} 条`);
+      }
+
       const total = targetItems.length;
       let processed = 0;
       let successCount = 0;
@@ -724,8 +761,8 @@ export class CommentService {
         .set({ total })
         .where(eq(syncJob.id, jobId));
 
-      // 帖子级并发抓取（并发数 2，避免触发风控）
-      const ITEM_CONCURRENCY = 2;
+      // 帖子级并发抓取（并发数 10）
+      const ITEM_CONCURRENCY = 10;
       for (let i = 0; i < targetItems.length; i += ITEM_CONCURRENCY) {
         const batch = targetItems.slice(i, i + ITEM_CONCURRENCY);
         const batchResults = await Promise.allSettled(

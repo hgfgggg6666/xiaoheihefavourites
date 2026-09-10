@@ -116,6 +116,7 @@ export const archiveItem = sqliteTable(
     sourceCreateAt: timestamptz('source_create_at'),
     aiTaggedAt: timestamptz('ai_tagged_at'),
     aiTagError: text('ai_tag_error'),
+    commentCrawledAt: timestamptz('comment_crawled_at'),
     isDeleted: bool('is_deleted').notNull().default(false),
     createdAt: timestamptz('_created_at').notNull().default(sql`(datetime('now'))`),
     createdBy: text('_created_by'),
@@ -241,6 +242,20 @@ export const archiveSettings = sqliteTable(
     openaiApiKey: text('openai_api_key').notNull(),
     openaiModel: text('openai_model').notNull().default('gpt-4o-mini'),
     openaiTemperature: real('openai_temperature').notNull().default(0.7),
+    // 情投意合专区爬取开关
+    crawlTopicEnabled: bool('crawl_topic_enabled').notNull().default(false),
+    // 专区 topic_id（默认 416158 对应情投意合专区页面的 link_id）
+    topicLinkId: text('topic_link_id').notNull().default('416158'),
+    // 自动同步开关
+    autoSyncEnabled: bool('auto_sync_enabled').notNull().default(false),
+    // 自动同步间隔（秒），默认 30
+    autoSyncInterval: integer('auto_sync_interval').notNull().default(30),
+    // 上次自动同步时间
+    lastAutoSyncAt: timestamptz('last_auto_sync_at'),
+    // 当前自动同步状态（idle/running/syncing/downloading/comments/error）
+    autoSyncStatus: text('auto_sync_status').notNull().default('idle'),
+    // 自动同步错误信息
+    autoSyncError: text('auto_sync_error'),
     createdAt: timestamptz('_created_at').notNull().default(sql`(datetime('now'))`),
     createdBy: text('_created_by'),
     updatedAt: timestamptz('_updated_at').notNull().default(sql`(datetime('now'))`),

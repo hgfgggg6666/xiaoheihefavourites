@@ -254,14 +254,14 @@ export default function BrowsePage() {
       </div>
 
       {/* Mobile sidebar trigger */}
-      <div className="md:hidden absolute left-4 top-3 z-30">
+      <div className="md:hidden fixed left-4 top-3 z-50">
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetTrigger asChild>
-            <Button variant="secondary" size="icon">
+            <Button variant="secondary" size="icon" className="shadow-md">
               <Menu className="h-4 w-4" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-[280px]">
+          <SheetContent side="left" className="p-0 w-[280px] h-[100dvh] overflow-hidden">
             <Sidebar {...sidebarProps} />
           </SheetContent>
         </Sheet>
