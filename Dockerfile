@@ -24,14 +24,14 @@ FROM node:20-slim AS runner
 
 WORKDIR /app
 
-# Install production dependencies
-COPY package.json package-lock.json* ./
-RUN rm -f package-lock.json && npm install --omit=dev --ignore-scripts && npm cache clean --force
+# Copy node_modules from builder stage (includes all dependencies needed at runtime)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy build artifacts
 COPY --from=builder /app/dist ./dist
 
 # Copy necessary config files
+COPY package.json ./
 COPY nest-cli.json ./
 COPY .env ./
 
