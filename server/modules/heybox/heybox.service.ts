@@ -12,6 +12,7 @@ import {
 import { SettingsService } from '../settings/settings.service';
 import Database from 'better-sqlite3';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 interface FavResponse {
   status: string;
@@ -729,18 +730,24 @@ export class HeyboxService {
     const images: string[] = [];
     const seen = new Set<string>();
 
+    const addImage = (url: string) => {
+      if (url && typeof url === 'string') {
+        const cleanUrl = url.split('?')[0];
+        if (!seen.has(cleanUrl)) {
+          seen.add(cleanUrl);
+          images.push(url);
+        }
+      }
+    };
+
     // 优先从 text 字段（富文本数组）提取图片
-    if (raw.text && typeof raw.text === 'string') {
+    if (raw.text) {
       try {
-        const textArr = JSON.parse(raw.text);
+        const textArr = typeof raw.text === 'string' ? JSON.parse(raw.text) : raw.text;
         if (Array.isArray(textArr)) {
           textArr.forEach((item: any) => {
-            if (item.type === 'img' && item.url && typeof item.url === 'string') {
-              const cleanUrl = item.url.split('?')[0];
-              if (!seen.has(cleanUrl) && !cleanUrl.includes('/live/')) {
-                seen.add(cleanUrl);
-                images.push(item.url);
-              }
+            if (item && item.type === 'img' && item.url) {
+              addImage(item.url);
             }
           });
         }
@@ -751,13 +758,14 @@ export class HeyboxService {
 
     // 如果 text 字段没有图片，再从 imgs 字段提取
     if (images.length === 0 && Array.isArray(raw.imgs)) {
-      raw.imgs.forEach((url: string) => {
-        if (url && typeof url === 'string') {
-          const cleanUrl = url.split('?')[0];
-          if (!seen.has(cleanUrl) && !cleanUrl.includes('/live/')) {
-            seen.add(cleanUrl);
-            images.push(url);
-          }
+      raw.imgs.forEach((url: string) => addImage(url));
+    }
+
+    // 如果还没有图片，尝试 hb_rich_texts 字段
+    if (images.length === 0 && Array.isArray(raw.hb_rich_texts)) {
+      raw.hb_rich_texts.forEach((item: any) => {
+        if (item && item.type === 'img' && item.url) {
+          addImage(item.url);
         }
       });
     }
@@ -775,12 +783,17 @@ export class HeyboxService {
         .prepare('SELECT id, linkid, raw_data, local_cover_path FROM archive_item WHERE is_deleted = 0 ORDER BY _created_at DESC')
         .all() as Array<{ id: string; linkid: string; raw_data: string; local_cover_path: string | null }>;
 
-      // 过滤出有正文图片且尚未归档的条目（优先从 text 字段提取）
+      // 过滤出有正文图片且尚未归档（或本地文件已丢失）的条目
       let items = allItems.filter((item) => {
         try {
-          // 如果已经有本地封面路径，说明已经归档过，跳过
+          // 如果已经有本地封面路径，检查文件是否真实存在；存在则跳过，丢失则重新下载
           if (item.local_cover_path && item.local_cover_path.trim() !== '') {
-            return false;
+            const relPath = item.local_cover_path.replace('./', '').replace(/^\//, '');
+            const fullPath = join(process.cwd(), relPath);
+            if (existsSync(fullPath)) {
+              return false; // 文件存在，跳过
+            }
+            // 文件丢失，继续往下走，重新下载
           }
           const raw = JSON.parse(item.raw_data);
           const images = this.extractPostImages(raw);
