@@ -64,6 +64,21 @@ async function apiPost(path, data = {}) {
   return JSON.parse(res.data.toString());
 }
 
+async function apiPatch(path, data = {}) {
+  const body = JSON.stringify(data);
+  const res = await httpRequest({
+    hostname: 'localhost',
+    port: 3000,
+    path,
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+    },
+  }, body);
+  return JSON.parse(res.data.toString());
+}
+
 async function waitForServer(maxRetries = 120) {
   console.log('等待应用启动...（最多等待 120 秒）');
   // 先等 5 秒，让应用有时间初始化
@@ -162,10 +177,10 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. 保存设置
+  // 4. 保存设置（注意：后端接口是 PATCH，不是 POST）
   console.log('\n保存设置...');
   try {
-    await apiPost('/api/settings', {
+    await apiPatch('/api/settings', {
       heyboxCookie: cookie,
       openaiBaseUrl,
       openaiApiKey,
@@ -174,7 +189,9 @@ async function main() {
     });
     console.log('设置保存成功');
   } catch (e) {
-    console.log('设置保存可能已存在，继续...');
+    console.error(`设置保存失败: ${e.message}`);
+    cleanup();
+    process.exit(1);
   }
 
   // 5. 同步收藏夹
@@ -183,12 +200,16 @@ async function main() {
     const syncResult = await apiPost('/api/heybox/sync');
     console.log(`同步任务已创建: ${syncResult.jobId || JSON.stringify(syncResult)}`);
   } catch (e) {
-    console.log(`同步任务创建: ${e.message}`);
+    console.error(`同步任务创建失败: ${e.message}`);
+    cleanup();
+    process.exit(1);
   }
 
   const syncSuccess = await waitForJob('/api/heybox/sync-status', '收藏夹同步');
   if (!syncSuccess) {
-    console.log('收藏夹同步失败，继续后续步骤...');
+    console.error('收藏夹同步失败，终止流程，不导出空站点');
+    cleanup();
+    process.exit(1);
   }
 
   // 6. 下载图片
@@ -207,6 +228,23 @@ async function main() {
 
   // 7. 导出静态站点
   console.log('\n开始导出静态站点...');
+
+  // 导出前校验：确认数据库里确实有数据，避免把空站点部署上线
+  try {
+    const stats = await apiGet('/api/archives/stats');
+    const totalItems = stats.totalItems || 0;
+    if (totalItems === 0) {
+      console.error(`数据校验失败：数据库中收藏数为 0，终止导出，不部署空站点`);
+      cleanup();
+      process.exit(1);
+    }
+    console.log(`数据校验通过：共 ${totalItems} 条收藏，开始导出`);
+  } catch (e) {
+    console.error(`数据校验请求失败: ${e.message}`);
+    cleanup();
+    process.exit(1);
+  }
+
   try {
     // 导出是流式下载，直接用 http 模块下载
     await new Promise((resolve, reject) => {
